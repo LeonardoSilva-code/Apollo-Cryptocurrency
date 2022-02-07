@@ -8,8 +8,16 @@ const genesisBlock: Block = new Block(
   "99a1bae571c467b78921b6c5b769d9de909ea8a91db070bbd3348c53b7999b51",
   "",
   1465154705,
-  "genesis block!!"
+  "genesis block!!",
+  10,
+  0
 );
+
+// Define em segundo quanto tempo deve levar para cada bloco ser minerado
+const BLOCK_GENERATION_INTERVAL: number = 10;
+
+//Para cada dez blocos a dificuldade é ajustada
+const DIFFICULTY_ADJUSTMENT_INTERVAL: number = 10;
 
 //Inicio da blockchain com o bloco genesis como primeiro bloco
 let blockChain: Block[] = [genesisBlock];
@@ -27,9 +35,13 @@ function calculateHash(
   index: number,
   previousHash: string,
   timestamp: number,
-  data: string
+  data: string,
+  difficulty: number,
+  nonce: number
 ) {
-  return CryptoJS.SHA256(index + previousHash + timestamp + data).toString();
+  return CryptoJS.SHA256(
+    index + previousHash + timestamp + data + difficulty + nonce
+  ).toString();
 }
 
 //Calcula o hash do bloco
@@ -38,7 +50,9 @@ function calculateHashForBlock(block: Block) {
     block.index,
     block.previousHash,
     block.timeStamp,
-    block.data
+    block.data,
+    block.difficulty,
+    block.nonce
   );
 }
 
@@ -46,19 +60,15 @@ function calculateHashForBlock(block: Block) {
 function generateNextBlock(blockData: string) {
   const previousBlock: Block = getLatestBlock();
   const nextIndex: number = previousBlock.index + 1;
-  const nextTimeStamp: number = new Date().getTime() / 1000;
-  const nextHash: string = calculateHash(
+  const nextTimeStamp: number = getCurrentTimestamp();
+  const difficulty: number = getDifficulty(getBlockChain());
+  console.log("difficulty: " + difficulty);
+  const newBlock: Block = findBlock(
     nextIndex,
     previousBlock.hash,
     nextTimeStamp,
-    blockData
-  );
-  const newBlock: Block = new Block(
-    nextIndex,
-    nextHash,
-    previousBlock.hash,
-    nextTimeStamp,
-    blockData
+    blockData,
+    difficulty
   );
   addBlockToChain(newBlock);
   broadcastLatest();
@@ -73,7 +83,10 @@ function isValidNewBlock(newBlock: Block, previousBlock: Block) {
   } else if (newBlock.previousHash !== previousBlock.hash) {
     console.log("block invalid");
     return false;
-  } else if (calculateHashForBlock(newBlock) !== newBlock.hash) {
+  } else if (!isValidTimestamp(newBlock, previousBlock)) {
+    console.log("block invalid");
+    return false;
+  } else if (!hasValidHash(newBlock)) {
     console.log("block invalid");
     return false;
   }
@@ -111,6 +124,108 @@ const addBlockToChain = (newBlock: Block) => {
   }
   return false;
 };
+
+function findBlock(
+  index: number,
+  previousHash: string,
+  timeStamp: number,
+  data: string,
+  difficulty: number
+) {
+  let nonce = 0;
+  while (true) {
+    const hash = calculateHash(
+      index,
+      previousHash,
+      timeStamp,
+      data,
+      difficulty,
+      nonce
+    );
+    if (hashMatchesDifficulty(hash, difficulty))
+      return new Block(
+        index,
+        hash,
+        previousHash,
+        timeStamp,
+        data,
+        difficulty,
+        nonce
+      );
+    nonce++;
+  }
+}
+
+function hashMatchesDifficulty(hash: string, difficulty: number) {
+  // const hashInBinary: string = parseInt(hash.toString(), 16).toString(2); //Converter hex para bin
+  const requiredPrefix: string = "0".repeat(difficulty);
+  return hash.startsWith(requiredPrefix);
+}
+
+const getDifficulty = (aBlockchain: Block[]): number => {
+  const latestBlock: Block = aBlockchain[blockChain.length - 1];
+  if (
+    latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 &&
+    latestBlock.index !== 0
+  ) {
+    return getAdjustedDifficulty(latestBlock, aBlockchain);
+  } else {
+    return latestBlock.difficulty;
+  }
+};
+
+//Aumenta ou diminui em 1 a dificultade baseado no tempo em que os blocos demorar para serem minerados.
+function getAdjustedDifficulty(latestBlock: Block, BlockChain: Block[]) {
+  //Ultimo ajuste feito
+  const prevAdjustmentBlock: Block =
+    BlockChain[blockChain.length - DIFFICULTY_ADJUSTMENT_INTERVAL];
+  //Tempo esperado
+  const timeExpected: number =
+    BLOCK_GENERATION_INTERVAL * DIFFICULTY_ADJUSTMENT_INTERVAL;
+  //Tempo que realmente levou
+  const timeTaken: number =
+    latestBlock.timeStamp - prevAdjustmentBlock.timeStamp;
+  if (timeTaken < timeExpected / 2) {
+    return prevAdjustmentBlock.difficulty + 1;
+  } else if (timeTaken > timeExpected * 2) {
+    return prevAdjustmentBlock.difficulty - 1;
+  } else {
+    return prevAdjustmentBlock.difficulty;
+  }
+}
+
+function isValidTimestamp(newBlock: Block, previousBlock: Block): boolean {
+  return (
+    previousBlock.timeStamp - 60 < newBlock.timeStamp &&
+    newBlock.timeStamp - 60 < getCurrentTimestamp()
+  );
+}
+
+function getCurrentTimestamp() {
+  return Math.round(new Date().getTime() / 1000);
+}
+
+function hasValidHash(block: Block): boolean {
+  if (!hashMatchesBlockContent(block)) {
+    console.log("invalid hash");
+    return false;
+  }
+
+  if (!hashMatchesDifficulty(block.hash, block.difficulty)) {
+    console.log(
+      "block difficulty not satisfied. Expected: " +
+        block.difficulty +
+        "got: " +
+        block.hash
+    );
+  }
+  return true;
+}
+
+function hashMatchesBlockContent(block: Block) {
+  if (calculateHashForBlock(block) !== block.hash) return false;
+  return true;
+}
 
 export {
   getBlockChain,
