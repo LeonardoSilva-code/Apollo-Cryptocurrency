@@ -2,22 +2,25 @@ import * as CryptoJS from "crypto-js";
 import { Block } from "./Block";
 import { broadcastLatest } from "./P2P";
 
+const MINE_DIFFICULTY = 5;
+
 //Bloco genesis é o primeiro bloco da Blockchain e precissa ser inserido na mãp
 const genesisBlock: Block = new Block(
   0,
   "99a1bae571c467b78921b6c5b769d9de909ea8a91db070bbd3348c53b7999b51",
   "",
   1465154705,
-  "genesis block!!",
-  10,
+  "genesis block",
+  MINE_DIFFICULTY,
   0
 );
 
+/*
 // Define em segundo quanto tempo deve levar para cada bloco ser minerado
-const BLOCK_GENERATION_INTERVAL: number = 10;
-
-//Para cada dez blocos a dificuldade é ajustada
-const DIFFICULTY_ADJUSTMENT_INTERVAL: number = 10;
+const BLOCK_GENERATION_INTERVAL: number = 5;
+//Para cada n blocos a dificuldade é ajustada
+const DIFFICULTY_ADJUSTMENT_INTERVAL: number = 5;
+*/
 
 //Inicio da blockchain com o bloco genesis como primeiro bloco
 let blockChain: Block[] = [genesisBlock];
@@ -61,7 +64,7 @@ function generateNextBlock(blockData: string) {
   const previousBlock: Block = getLatestBlock();
   const nextIndex: number = previousBlock.index + 1;
   const nextTimeStamp: number = getCurrentTimestamp();
-  const difficulty: number = getDifficulty(getBlockChain());
+  const difficulty: number = MINE_DIFFICULTY;
   console.log("difficulty: " + difficulty);
   const newBlock: Block = findBlock(
     nextIndex,
@@ -160,38 +163,6 @@ function hashMatchesDifficulty(hash: string, difficulty: number) {
   // const hashInBinary: string = parseInt(hash.toString(), 16).toString(2); //Converter hex para bin
   const requiredPrefix: string = "0".repeat(difficulty);
   return hash.startsWith(requiredPrefix);
-}
-
-const getDifficulty = (aBlockchain: Block[]): number => {
-  const latestBlock: Block = aBlockchain[blockChain.length - 1];
-  if (
-    latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 &&
-    latestBlock.index !== 0
-  ) {
-    return getAdjustedDifficulty(latestBlock, aBlockchain);
-  } else {
-    return latestBlock.difficulty;
-  }
-};
-
-//Aumenta ou diminui em 1 a dificultade baseado no tempo em que os blocos demorar para serem minerados.
-function getAdjustedDifficulty(latestBlock: Block, BlockChain: Block[]) {
-  //Ultimo ajuste feito
-  const prevAdjustmentBlock: Block =
-    BlockChain[blockChain.length - DIFFICULTY_ADJUSTMENT_INTERVAL];
-  //Tempo esperado
-  const timeExpected: number =
-    BLOCK_GENERATION_INTERVAL * DIFFICULTY_ADJUSTMENT_INTERVAL;
-  //Tempo que realmente levou
-  const timeTaken: number =
-    latestBlock.timeStamp - prevAdjustmentBlock.timeStamp;
-  if (timeTaken < timeExpected / 2) {
-    return prevAdjustmentBlock.difficulty + 1;
-  } else if (timeTaken > timeExpected * 2) {
-    return prevAdjustmentBlock.difficulty - 1;
-  } else {
-    return prevAdjustmentBlock.difficulty;
-  }
 }
 
 function isValidTimestamp(newBlock: Block, previousBlock: Block): boolean {
